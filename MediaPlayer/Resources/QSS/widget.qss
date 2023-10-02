@@ -1,0 +1,87 @@
+QLineEdit {
+    border: none;
+    border-radius: 20px;
+    background-color: rgb(23,23,27,150);
+    font-family: "Microsoft YaHei";
+    font-size: 16px;
+    color:rgb(255,255,255);
+    padding-left: 20px;
+    padding-right: 20px;
+    padding-bottom: 2px;
+}
+
+QLabel {
+    color:rgb(255,255,255);
+    background-color: transparent;
+    font-family: "Microsoft YaHei";
+    font-size: 16px;
+}
+
+QPushButton {
+    border: none;
+    border-radius: 10px;
+    text-align: center;
+    background-color: rgb(255,255,255);
+    font-family: "Microsoft YaHei";
+    font-size: 16px;
+    color: rgb(20,20,20);
+    padding-bottom: 2px;
+}
+QPushButton:hover {
+    background-color: rgb(255,255,255);
+    color: rgb(255,92,56);
+}
+
+/*播放进度条*/
+QSlider::groove:horizontal#slider_AVPts {
+    border:0px;
+}
+QSlider::sub-page:horizontal#slider_AVPts {
+    background:rgb(255,92,56);
+    margin-top:7px;
+    margin-bottom:7px;
+}
+QSlider::add-page:horizontal#slider_AVPts {
+    background:rgb(83,83,83);
+    margin-top:7px;
+    margin-bottom:7px;
+}
+/*正常拖动把手样式*/
+QSlider::handle:horizontal#slider_AVPts {
+    background-color: rgb(255, 79, 74);
+    border-radius: 7px;
+    border:none;
+    width:14px;
+    margin-top: 2px;
+    margin-bottom: 2px;
+}
+/*鼠标悬停把手样式*/
+QSlider::handle:horizontal:hover#slider_AVPts {
+    background-color: rgb(255, 79, 74);
+    border:none;
+    width: 18px;
+    border-radius:9px;
+    margin-top: 0px;
+    margin-bottom: 0px;
+}
+
+/*音量条*/
+QSlider::groove:horizontal#slider_volume {
+    border:0px;
+}
+QSlider::sub-page:horizontal#slider_volume {
+    background:rgb(241,241,241);
+    margin-top:3px;
+    margin-bottom:3px;
+}
+QSlider::add-page:horizontal#slider_volume {
+    background:rgb(92,92,92);
+    margin-top:3px;
+    margin-bottom:3px;
+}
+QSlider::handle:horizontal#slider_volume {
+    background-color: rgb(255,255,255);
+    border:none;
+    width:12px;
+    border-radius:6px;
+}

@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/">
+        <file>QSS/widget.qss</file>
+    </qresource>
+</RCC>
