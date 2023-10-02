@@ -41,8 +41,16 @@ void main(void) \
 
 
 OpenGLWidget::OpenGLWidget(QWidget *parent):
-    QOpenGLWidget(parent)
+    QOpenGLWidget(parent),
+    m_isDoubleClick(0)
 {
+    connect(&m_timer,&QTimer::timeout,[this](){
+        if(!this->m_isDoubleClick)
+            emit this->mouseClicked();
+        this->m_isDoubleClick=0;
+        this->m_timer.stop();
+    });
+    m_timer.setInterval(400);
 }
 
 OpenGLWidget::~OpenGLWidget()
@@ -233,5 +241,17 @@ void OpenGLWidget::paintGL()
     glUniform1i(posUniformV, 2);
     //使用顶点数组方式绘制图形
     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+}
+
+void OpenGLWidget::mouseReleaseEvent(QMouseEvent *event)
+{
+    if(!m_timer.isActive())
+        m_timer.start();
+}
+
+void OpenGLWidget::mouseDoubleClickEvent(QMouseEvent *event)
+{
+    m_isDoubleClick=1;
+    emit mouseDoubleClicked();
 }
 

@@ -27,26 +27,33 @@ Widget::Widget(QWidget *parent)
     ui->label_volume->setAlignment(Qt::AlignCenter);
     ui->lineEdit_input->setText("D:/MusicResources/Music/MV/xcz.mp4");//http://60.204.208.153/xcz.mp4
 
+    ui->slider_AVPts->setEnabled(false);
+    ui->btn_forward->setEnabled(false);
+    ui->btn_back->setEnabled(false);
+    ui->btn_pauseon->setEnabled(false);
+
     //自定义数据类型在槽中作为参数传递需先注册
     qRegisterMetaType<QSharedPointer<YUV420Frame>>("QSharedPointer<YUV420Frame>");
     m_player=new AVPlayer;
     connect(m_player,&AVPlayer::frameChanged,ui->opengl_widget,&OpenGLWidget::onShowYUV,Qt::QueuedConnection);
 
-    connect(ui->btn_pauseon,&QPushButton::clicked,this,&Widget::playBtnClickSlot);
+    connect(ui->btn_pauseon,&QPushButton::clicked,this,&Widget::pauseOnBtnClickSlot);
 
     connect(ui->btn_play,&QPushButton::clicked,this,[&](){
             const QString url=ui->lineEdit_input->text();
-            if(url.count())
-                m_player->play(url);
+            if(url.count()) {
+                if(m_player->play(url)) {
+                    ui->slider_AVPts->setEnabled(true);
+                    ui->btn_forward->setEnabled(true);
+                    ui->btn_back->setEnabled(true);
+                    ui->btn_pauseon->setEnabled(true);
+                }
+            }
     });
 
-    connect(ui->btn_up,&QPushButton::clicked,[&](){
-        m_player->seekBy(6);
-    });
+    connect(ui->btn_forward,&QPushButton::clicked,this,&Widget::seekForwardSlot);
 
-    connect(ui->btn_back,&QPushButton::clicked,[&](){
-        m_player->seekBy(-6);
-    });
+    connect(ui->btn_back,&QPushButton::clicked,this,&Widget::seekBackSlot);
 
     connect(ui->slider_volume,&QSlider::valueChanged,this,&Widget::setVolume);
 
@@ -61,10 +68,37 @@ Widget::Widget(QWidget *parent)
     connect(ui->slider_AVPts,&AVPtsSlider::sliderPressed,this,&Widget::ptsSliderPressedSlot);
     connect(ui->slider_AVPts,&AVPtsSlider::sliderMoved,this,&Widget::ptsSliderMovedSlot);
     connect(ui->slider_AVPts,&AVPtsSlider::sliderReleased,this,&Widget::ptsSliderReleaseSlot);
+
+    connect(ui->opengl_widget,&OpenGLWidget::mouseDoubleClicked,[&](){
+        if(this->isMaximized()) {
+            this->showNormal();
+        }
+        else {
+            showMaximized();
+        }
+    });
+    connect(ui->opengl_widget,&OpenGLWidget::mouseClicked,this,&Widget::pauseOnBtnClickSlot);
 }
 
 void Widget::resizeEvent(QResizeEvent* event)
 {
+}
+
+void Widget::keyReleaseEvent(QKeyEvent *event)
+{
+    switch (event->key()) {
+        case Qt::Key_Right:
+            seekForwardSlot();
+            break;
+        case Qt::Key_Left:
+            seekBackSlot();
+            break;
+        case Qt::Key_Space:
+            pauseOnBtnClickSlot();
+            break;
+        default:
+            break;
+    }
 }
 
 void Widget::durationChangedSlot(unsigned int duration)
@@ -88,6 +122,10 @@ void Widget::terminateSlot()
 {
     ui->label_pts->setText(QString("00:00"));
     ui->label_duration->setText(QString("00:00"));
+    ui->slider_AVPts->setEnabled(false);
+    ui->btn_forward->setEnabled(false);
+    ui->btn_back->setEnabled(false);
+    ui->btn_pauseon->setEnabled(false);
     m_player->clearPlayer();
 }
 
@@ -115,6 +153,20 @@ void Widget::ptsSliderReleaseSlot()
     m_ptsSliderPressed=false;
 }
 
+void Widget::seekForwardSlot()
+{
+    m_player->seekBy(6);
+    if(m_player->playState()==AVPlayer::AV_PAUSED)
+        m_player->pause(false);
+}
+
+void Widget::seekBackSlot()
+{
+    m_player->seekBy(-6);
+    if(m_player->playState()==AVPlayer::AV_PAUSED)
+        m_player->pause(false);
+}
+
 void Widget::paintEvent(QPaintEvent *event)
 {
     Q_UNUSED(event)
@@ -128,7 +180,7 @@ Widget::~Widget()
     delete ui;
 }
 
-void Widget::playBtnClickSlot()
+void Widget::pauseOnBtnClickSlot()
 {
     switch (m_player->playState()) {
         case AVPlayer::AV_PLAYING:

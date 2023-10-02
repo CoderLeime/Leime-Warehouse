@@ -38,7 +38,7 @@ public:
     AVPlayer();
     ~AVPlayer();
 
-    void play(const QString& url);
+    int play(const QString& url);
 
     void pause(bool isPause);
 

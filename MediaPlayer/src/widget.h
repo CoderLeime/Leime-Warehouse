@@ -32,7 +32,7 @@ public:
 protected:
     virtual void paintEvent(QPaintEvent *event) override;
     virtual void resizeEvent(QResizeEvent* event) override;
-    //virtual bool eventFilter(QObject* obj,QEvent* event) override;
+    virtual void keyReleaseEvent(QKeyEvent *event) override;
 
 private:
     Ui::Widget *ui;
@@ -47,7 +47,7 @@ private:
 
     int m_seekTarget;
 private Q_SLOTS:
-    void playBtnClickSlot();
+    void pauseOnBtnClickSlot();
 
     void addFile();
 
@@ -64,5 +64,9 @@ private Q_SLOTS:
     void ptsSliderMovedSlot();
 
     void ptsSliderReleaseSlot();
+
+    void seekForwardSlot();
+
+    void seekBackSlot();
 };
 #endif // WIDGET_H

@@ -380,8 +380,8 @@ void Decoder::audioDecode(std::shared_ptr<void> par)
             }
         }
         else {
-            qDebug() << "audio packet queue is empty for decode!";
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            //qDebug() << "audio packetQueue is empty for decoding!";
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
         }
     }
     av_packet_free(&pkt);
@@ -435,8 +435,8 @@ void Decoder::videoDecode(std::shared_ptr<void> par)
             }
         }
         else {
-            qDebug() << "video packet queue is empty for decode!";
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            //qDebug() << "video packetQueue is empty for decoding!";
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
         }
     }
     av_packet_free(&pkt);

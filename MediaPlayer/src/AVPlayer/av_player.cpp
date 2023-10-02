@@ -49,12 +49,12 @@ AVPlayer::~AVPlayer()
         av_free(m_buffer);
 }
 
-void AVPlayer::play(const QString& url)
+int AVPlayer::play(const QString& url)
 {
     clearPlayer();
     if(!m_decoder->decode(url)) {
         qDebug()<<"decode failed";
-        return;
+        return 0;
     }
 
     //解码成功可获取流时长
@@ -66,7 +66,7 @@ void AVPlayer::play(const QString& url)
 
     if(!initSDL()) {
         qDebug()<<"init sdl failed!";
-        return;
+        return 0;
     }
     initVideo();
 }

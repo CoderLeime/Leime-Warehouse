@@ -19,13 +19,18 @@ public:
     explicit OpenGLWidget(QWidget *parent = 0);
     ~OpenGLWidget();
 
+signals:
+    void mouseClicked();
+    void mouseDoubleClicked();
+
 public slots:
-    //void slotShowYuv(uchar *ptr,uint width,uint height); //显示一帧Yuv图像
     void onShowYUV(QSharedPointer<YUV420Frame> frame);
 
 protected:
     void initializeGL() Q_DECL_OVERRIDE;
     void paintGL() Q_DECL_OVERRIDE;
+    virtual void mouseReleaseEvent(QMouseEvent *event);
+    virtual void mouseDoubleClickEvent(QMouseEvent *event);
 
 private:
     QOpenGLShaderProgram *program;
@@ -40,10 +45,12 @@ private:
     //纹理ID，创建错误返回0
     GLuint m_idY,m_idU,m_idV;
 
-    //像素分辨率
-
     //原始数据
     QSharedPointer<YUV420Frame> m_frame;
+
+    int m_isDoubleClick;
+
+    QTimer m_timer;
 };
 
 
