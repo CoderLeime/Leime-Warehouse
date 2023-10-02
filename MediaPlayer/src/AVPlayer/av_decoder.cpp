@@ -456,7 +456,6 @@ int Decoder::getPacket(PacketQueue* queue,AVPacket* pkt,PktDecoder* decoder)
     if(queue->serial!=decoder->serial) {
         //序列号不连续的帧证明发生了跳转操作则直接丢弃
         //并清空解码器缓存
-        qDebug()<<queue->serial<<decoder->serial;
         avcodec_flush_buffers(decoder->codecCtx);
         decoder->serial=queue->pktVec[queue->readIndex].serial;
         return 0;

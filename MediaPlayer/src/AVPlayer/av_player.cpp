@@ -330,6 +330,8 @@ void AVPlayer::videoCallback(std::shared_ptr<void> par)
             MyFrame* lastFrame=m_decoder->peekLastVFrame();
             MyFrame* frame=m_decoder->peekVFrame();
 
+            //qDebug()<<"video pts:"<<frame->pts;
+
             if(frame->serial!=m_decoder->vidPktSerial()) {
                 m_decoder->setNextVFrame();
                 continue;
@@ -355,20 +357,19 @@ void AVPlayer::videoCallback(std::shared_ptr<void> par)
             if(time-m_frameTimer>AV_SYNC_THRESHOLD_MAX)
                 m_frameTimer=time;
 
-            //队列中未显示帧一帧以上执行丢帧判断
+            //队列中未显示帧一帧以上执行逻辑丢帧判断
             if(m_decoder->getRemainingVFrame()>1) {
                 MyFrame* nextFrame=m_decoder->peekNextVFrame();
-                duration=(nextFrame->pts-frame->pts)*av_q2d(m_fmtCtx->streams[m_videoIndex]->time_base);
+                duration=nextFrame->pts-frame->pts;
                 //若主时钟超前到大于当前帧理论显示应持续的时间了，则当前帧立即丢弃
                 if(time>m_frameTimer+duration) {
                     m_decoder->setNextVFrame();
-                    //qDebug()<<"abandon vframe"<<endl;
+                    qDebug()<<"abandon vframe"<<endl;
                     continue;
                 }
             }
 
             displayImage(&frame->frame);
-            QThread::msleep(10);
             //读索引后移
             m_decoder->setNextVFrame();
         }
@@ -384,7 +385,7 @@ double AVPlayer::computeTargetDelay(double delay)
 {
     //视频当前显示帧与当前播放音频帧时间戳差值
     double diff=m_videoClock.getClock()-m_audioClock.getClock();
-    qDebug()<<diff;
+    //qDebug()<<"diff:"<<diff;
     //计算同步阈值
     double sync=FFMAX(AV_SYNC_THRESHOLD_MIN,FFMIN(AV_SYNC_THRESHOLD_MAX,delay));
 
