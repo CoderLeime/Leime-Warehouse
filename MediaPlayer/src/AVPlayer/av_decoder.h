@@ -14,22 +14,38 @@ extern "C"
 QT_BEGIN_NAMESPACE
 namespace AVTool
 {
-
 class Decoder
 {
+public:
+    typedef struct MyFrame
+    {
+        AVFrame frame;
+        int serial;
+        double duration;
+        double pts;
+    }MyFrame;
+
+private:
+    typedef struct MyPacket
+    {
+        AVPacket pkt;
+        int serial;
+    }MyPacket;
+
     typedef struct PacketQueue
     {
-        QVector<AVPacket> pktVec;
+        QVector<MyPacket> pktVec;
         int readIndex;
         int pushIndex;
         int size;
+        int serial;
         std::mutex mutex;
         std::condition_variable cond;
     }PacketQueue;
 
     typedef struct FrameQueue
     {
-        QVector<AVFrame> frameVec;
+        QVector<MyFrame> frameVec;
         int readIndex;
         int pushIndex;
         int shown;
@@ -37,6 +53,12 @@ class Decoder
         std::mutex mutex;
         std::condition_variable cond;
     }FrameQueue;
+
+    typedef struct PktDecoder
+    {
+        AVCodecContext* codecCtx;
+        int serial;
+    }PktDecoder;
 
 public:
     Decoder();
@@ -48,13 +70,18 @@ public:
 
     int getRemainingVFrame();
     //查看上一帧（即当前显示的画面帧）
-    AVFrame* peekLastVFrame();
+    Decoder::MyFrame* peekLastVFrame();
     //查看将要显示的帧
-    AVFrame* peekVFrame();
+    Decoder::MyFrame* peekVFrame();
     //查看将要显示帧再下一帧
-    AVFrame* peekNextVFrame();
+    Decoder::MyFrame* peekNextVFrame();
     //将读索引后移一位
     void setNextVFrame();
+
+    inline int vidPktSerial() const
+    {
+        return m_videoPacketQueue.serial;
+    }
 
     inline int audioIndex() const
     {
@@ -73,12 +100,12 @@ public:
 
     inline AVCodecParameters* audioCodecPar() const
     {
-        return m_audioCodecPar;
+        return m_fmtCtx->streams[m_audioIndex]->codecpar;
     }
 
     inline AVCodecParameters* videoCodecPar() const
     {
-        return m_videoCodecPar;
+        return m_fmtCtx->streams[m_videoIndex]->codecpar;
     }
 
     inline uint32_t avDuration()
@@ -102,13 +129,10 @@ private:
     FrameQueue m_audioFrameQueue;
     FrameQueue m_videoFrameQueue;
 
+    PktDecoder m_audioPktDecoder;
+    PktDecoder m_videoPktDecoder;
+
     AVFormatContext* m_fmtCtx;
-
-    AVCodecParameters* m_audioCodecPar;
-    AVCodecParameters* m_videoCodecPar;
-
-    AVCodecContext* m_audioCodecCtx;
-    AVCodecContext* m_videoCodecCtx;
 
     const int m_maxFrameQueueSize;
     const int m_maxPacketQueueSize;
@@ -143,14 +167,16 @@ private:
 
     void setInitVal();
 
-    void clearQueue();
+    void packetQueueFlush(PacketQueue* queue);
+
+    void clearQueueCache();
 
     void demux(std::shared_ptr<void> par);
 
     void audioDecode(std::shared_ptr<void> par);
     void videoDecode(std::shared_ptr<void> par);
 
-    int getPacket(PacketQueue* queue,AVPacket* pkt);
+    int getPacket(PacketQueue* queue,AVPacket* pkt,PktDecoder* decoder);
     void pushPacket(PacketQueue* queue,AVPacket* pkt);
 
     void pushAFrame(AVFrame* frame);

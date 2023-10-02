@@ -12,10 +12,6 @@ Decoder::Decoder()
       m_audioIndex(-1),
       m_duration(0),
       m_fmtCtx(nullptr),
-      m_audioCodecCtx(nullptr),
-      m_videoCodecCtx(nullptr),
-      m_audioCodecPar(nullptr),
-      m_videoCodecPar(nullptr),
       m_exit(0)
 {
     if(!init())
@@ -40,6 +36,9 @@ bool Decoder::init()
     m_audioFrameQueue.frameVec.resize(m_maxFrameQueueSize);
     m_videoFrameQueue.frameVec.resize(m_maxFrameQueueSize);
 
+    m_audioPktDecoder.codecCtx=nullptr;
+    m_videoPktDecoder.codecCtx=nullptr;
+
     return true;
 }
 
@@ -48,10 +47,12 @@ void Decoder::setInitVal()
     m_audioPacketQueue.size=0;
     m_audioPacketQueue.pushIndex=0;
     m_audioPacketQueue.readIndex=0;
+    m_audioPacketQueue.serial=0;
 
     m_videoPacketQueue.size=0;
     m_videoPacketQueue.pushIndex=0;
     m_videoPacketQueue.readIndex=0;
+    m_videoPacketQueue.serial=0;
 
     m_audioFrameQueue.size=0;
     m_audioFrameQueue.readIndex=0;
@@ -69,6 +70,9 @@ void Decoder::setInitVal()
 
     m_audSeek=0;
     m_vidSeek=0;
+
+    m_audioPktDecoder.serial=0;
+    m_videoPktDecoder.serial=0;
 }
 
 int Decoder::decode(const QString& url)
@@ -118,29 +122,29 @@ int Decoder::decode(const QString& url)
     }
 
     //音频解码初始化
-    m_audioCodecPar = m_fmtCtx->streams[m_audioIndex]->codecpar;
-    if (!m_audioCodecPar) {
+    AVCodecParameters* audioCodecPar = m_fmtCtx->streams[m_audioIndex]->codecpar;
+    if (!audioCodecPar) {
         qDebug() << "audio par is nullptr!";
         return 0;
     }
 
-    m_audioCodecCtx = avcodec_alloc_context3(nullptr);
+    m_audioPktDecoder.codecCtx = avcodec_alloc_context3(nullptr);
 
-    ret = avcodec_parameters_to_context(m_audioCodecCtx, m_audioCodecPar);
+    ret = avcodec_parameters_to_context(m_audioPktDecoder.codecCtx, audioCodecPar);
     if (ret < 0) {
         av_strerror(ret, m_errBuf, sizeof(m_errBuf));
         qDebug() << "error info_avcodec_parameters_to_context:" << m_errBuf;
         return 0;
     }
 
-    const AVCodec* audioCodec = avcodec_find_decoder(m_audioCodecCtx->codec_id);
+    const AVCodec* audioCodec = avcodec_find_decoder(m_audioPktDecoder.codecCtx->codec_id);
     if (!audioCodec) {
         qDebug() << "avcodec_find_decoder failed!";
         return 0;
     }
-    m_audioCodecCtx->codec_id = audioCodec->id;
+    m_audioPktDecoder.codecCtx->codec_id = audioCodec->id;
 
-    ret = avcodec_open2(m_audioCodecCtx, audioCodec, nullptr);
+    ret = avcodec_open2(m_audioPktDecoder.codecCtx, audioCodec, nullptr);
     if (ret < 0) {
         av_strerror(ret, m_errBuf, sizeof(m_errBuf));
         qDebug() << "error info_avcodec_open2:" << m_errBuf;
@@ -148,29 +152,29 @@ int Decoder::decode(const QString& url)
     }
 
     //视频解码初始化
-    m_videoCodecPar= m_fmtCtx->streams[m_videoIndex]->codecpar;
-    if (!m_videoCodecPar) {
+    AVCodecParameters* videoCodecPar= m_fmtCtx->streams[m_videoIndex]->codecpar;
+    if (!videoCodecPar) {
         qDebug() << "videocodecpar is nullptr!";
         return 0;
     }
 
-    m_videoCodecCtx = avcodec_alloc_context3(nullptr);
+    m_videoPktDecoder.codecCtx = avcodec_alloc_context3(nullptr);
 
-    ret = avcodec_parameters_to_context(m_videoCodecCtx, m_videoCodecPar);
+    ret = avcodec_parameters_to_context(m_videoPktDecoder.codecCtx, videoCodecPar);
     if (ret < 0) {
         av_strerror(ret, m_errBuf, sizeof(m_errBuf));
         qDebug() << "error info_avcodec_parameters_to_context:" << m_errBuf;
         return 0;
     }
 
-    const AVCodec* videoCodec = avcodec_find_decoder(m_videoCodecCtx->codec_id);
+    const AVCodec* videoCodec = avcodec_find_decoder(m_videoPktDecoder.codecCtx->codec_id);
     if (!videoCodec) {
         qDebug() << "avcodec_find_decoder failed!";
         return 0;
     }
-    m_videoCodecCtx->codec_id = videoCodec->id;
+    m_videoPktDecoder.codecCtx->codec_id = videoCodec->id;
 
-    ret = avcodec_open2(m_videoCodecCtx, videoCodec, nullptr);
+    ret = avcodec_open2(m_videoPktDecoder.codecCtx, videoCodec, nullptr);
     if (ret < 0) {
         av_strerror(ret, m_errBuf, sizeof(m_errBuf));
         qDebug() << "error info_avcodec_open2:" << m_errBuf;
@@ -189,19 +193,38 @@ int Decoder::decode(const QString& url)
     return 1;
 }
 
-void Decoder::clearQueue()
+void Decoder::exit()
+{
+    m_exit=1;
+    QThread::msleep(200);
+    clearQueueCache();
+    if(m_fmtCtx) {
+        avformat_close_input(&m_fmtCtx);
+        m_fmtCtx=nullptr;
+    }
+    if(m_audioPktDecoder.codecCtx) {
+        avcodec_free_context(&m_audioPktDecoder.codecCtx);
+        m_audioPktDecoder.codecCtx=nullptr;
+    }
+    if(m_videoPktDecoder.codecCtx) {
+        avcodec_free_context(&m_videoPktDecoder.codecCtx);
+        m_videoPktDecoder.codecCtx=nullptr;
+    }
+}
+
+void Decoder::clearQueueCache()
 {
     std::lock_guard<std::mutex> lockAP(m_audioPacketQueue.mutex);
     std::lock_guard<std::mutex> lockVP(m_videoPacketQueue.mutex);
 
     while(m_audioPacketQueue.size) {      
-        av_packet_unref(&m_audioPacketQueue.pktVec[m_audioPacketQueue.readIndex]);
+        av_packet_unref(&m_audioPacketQueue.pktVec[m_audioPacketQueue.readIndex].pkt);
         m_audioPacketQueue.readIndex=(m_audioPacketQueue.readIndex+1)%m_maxPacketQueueSize;
         m_audioPacketQueue.size--;
     }
 
     while(m_videoPacketQueue.size) {
-        av_packet_unref(&m_videoPacketQueue.pktVec[m_videoPacketQueue.readIndex]);
+        av_packet_unref(&m_videoPacketQueue.pktVec[m_videoPacketQueue.readIndex].pkt);
         m_videoPacketQueue.readIndex=(m_videoPacketQueue.readIndex+1)%m_maxPacketQueueSize;
         m_videoPacketQueue.size--;
     }
@@ -210,35 +233,28 @@ void Decoder::clearQueue()
     std::lock_guard<std::mutex> lockVF(m_videoFrameQueue.mutex);
 
     while(m_audioFrameQueue.size) {
-        av_frame_unref(&m_audioFrameQueue.frameVec[m_audioFrameQueue.readIndex]);
+        av_frame_unref(&m_audioFrameQueue.frameVec[m_audioFrameQueue.readIndex].frame);
         m_audioFrameQueue.readIndex=(m_audioFrameQueue.readIndex+1)%m_maxFrameQueueSize;
         m_audioFrameQueue.size--;
     }
 
     while(m_videoFrameQueue.size) {
-        av_frame_unref(&m_videoFrameQueue.frameVec[m_videoFrameQueue.readIndex]);
+        av_frame_unref(&m_videoFrameQueue.frameVec[m_videoFrameQueue.readIndex].frame);
         m_videoFrameQueue.readIndex=(m_videoFrameQueue.readIndex+1)%m_maxFrameQueueSize;
         m_videoFrameQueue.size--;
     }
 }
 
-void Decoder::exit()
+void Decoder::packetQueueFlush(PacketQueue* queue)
 {
-    m_exit=1;
-    QThread::msleep(200);
-    clearQueue();
-    if(m_fmtCtx) {
-        avformat_close_input(&m_fmtCtx);
-        m_fmtCtx=nullptr;
+    std::lock_guard<std::mutex> lockAP(queue->mutex);
+
+    while(queue->size) {
+        av_packet_unref(&queue->pktVec[queue->readIndex].pkt);
+        queue->readIndex=(queue->readIndex+1)%m_maxPacketQueueSize;
+        queue->size--;
     }
-    if(m_audioCodecCtx) {
-        avcodec_free_context(&m_audioCodecCtx);
-        m_audioCodecCtx=nullptr;
-    }
-    if(m_videoCodecCtx) {
-        avcodec_free_context(&m_videoCodecCtx);
-        m_videoCodecCtx=nullptr;
-    }
+    queue->serial++;
 }
 
 void Decoder::seekTo(int32_t target,int32_t seekRel)
@@ -278,9 +294,8 @@ void Decoder::demux(std::shared_ptr<void> par)
                 qDebug() << "avformat_seek_file error:" << m_errBuf;
             }
             else {
-                clearQueue();
-                avcodec_flush_buffers(m_audioCodecCtx);
-                avcodec_flush_buffers(m_videoCodecCtx);
+                packetQueueFlush(&m_audioPacketQueue);
+                packetQueueFlush(&m_videoPacketQueue);
                 m_audSeek=1;
                 m_vidSeek=1;
             }
@@ -333,9 +348,9 @@ void Decoder::audioDecode(std::shared_ptr<void> par)
             continue;
         }
         //从音频包队列取音频包
-        int ret=getPacket(&m_audioPacketQueue,pkt);
+        int ret=getPacket(&m_audioPacketQueue,pkt,&m_audioPktDecoder);
         if (ret) {
-            ret = avcodec_send_packet(m_audioCodecCtx, pkt);
+            ret = avcodec_send_packet(m_audioPktDecoder.codecCtx, pkt);
             av_packet_unref(pkt);
             if (ret < 0) {
                 av_strerror(ret, m_errBuf, sizeof(m_errBuf));
@@ -343,7 +358,7 @@ void Decoder::audioDecode(std::shared_ptr<void> par)
                 continue;
             }
             while(1) {
-                ret = avcodec_receive_frame(m_audioCodecCtx, frame);
+                ret = avcodec_receive_frame(m_audioPktDecoder.codecCtx, frame);
                 if (ret == 0) {
                     if(m_audSeek) {
                         int pts=(int)frame->pts*av_q2d(m_fmtCtx->streams[m_audioIndex]->time_base);
@@ -387,9 +402,9 @@ void Decoder::videoDecode(std::shared_ptr<void> par)
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
             continue;
         }
-        int ret=getPacket(&m_videoPacketQueue,pkt);
+        int ret=getPacket(&m_videoPacketQueue,pkt,&m_videoPktDecoder);
         if (ret) {
-            ret = avcodec_send_packet(m_videoCodecCtx, pkt);
+            ret = avcodec_send_packet(m_videoPktDecoder.codecCtx, pkt);
             av_packet_unref(pkt);
             if (ret < 0 || ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
                 av_strerror(ret, m_errBuf, sizeof(m_errBuf));
@@ -397,7 +412,7 @@ void Decoder::videoDecode(std::shared_ptr<void> par)
                 continue;
             }      
             while(1) {
-                ret = avcodec_receive_frame(m_videoCodecCtx, frame);
+                ret = avcodec_receive_frame(m_videoPktDecoder.codecCtx, frame);
                 if (ret == 0) {
                     if(m_vidSeek) {
                         int pts=(int)frame->pts*av_q2d(m_fmtCtx->streams[m_videoIndex]->time_base);
@@ -429,7 +444,7 @@ void Decoder::videoDecode(std::shared_ptr<void> par)
     qDebug() << "videoDecode exit";
 }
 
-int Decoder::getPacket(PacketQueue* queue,AVPacket* pkt)
+int Decoder::getPacket(PacketQueue* queue,AVPacket* pkt,PktDecoder* decoder)
 {
     std::unique_lock<std::mutex> lock(queue->mutex);
     while(!queue->size) { 
@@ -438,7 +453,16 @@ int Decoder::getPacket(PacketQueue* queue,AVPacket* pkt)
         if(!ret)
             return 0;
     }
-    av_packet_move_ref(pkt,&queue->pktVec[queue->readIndex]);
+    if(queue->serial!=decoder->serial) {
+        //序列号不连续的帧证明发生了跳转操作则直接丢弃
+        //并清空解码器缓存
+        qDebug()<<queue->serial<<decoder->serial;
+        avcodec_flush_buffers(decoder->codecCtx);
+        decoder->serial=queue->pktVec[queue->readIndex].serial;
+        return 0;
+    }
+    av_packet_move_ref(pkt,&queue->pktVec[queue->readIndex].pkt);
+    decoder->serial=queue->pktVec[queue->readIndex].serial;
     queue->readIndex=(queue->readIndex+1)%m_maxPacketQueueSize;
     queue->size--;
     return 1;
@@ -447,7 +471,10 @@ int Decoder::getPacket(PacketQueue* queue,AVPacket* pkt)
 void Decoder::pushPacket(PacketQueue* queue,AVPacket* pkt)
 {
     std::lock_guard<std::mutex> lock(queue->mutex);
-    av_packet_move_ref(&queue->pktVec[queue->pushIndex],pkt);
+    av_packet_move_ref(&queue->pktVec[queue->pushIndex].pkt,pkt);
+    queue->pktVec[queue->pushIndex].serial=queue->serial;
+    if(queue->serial==1)
+        qDebug()<<"";
     queue->pushIndex=(queue->pushIndex+1)%m_maxPacketQueueSize;
     queue->size++;
 }
@@ -455,7 +482,8 @@ void Decoder::pushPacket(PacketQueue* queue,AVPacket* pkt)
 void Decoder::pushAFrame(AVFrame* frame)
 {
     std::lock_guard<std::mutex> lock(m_audioFrameQueue.mutex);
-    av_frame_move_ref(&m_audioFrameQueue.frameVec[m_audioFrameQueue.pushIndex],frame);
+    av_frame_move_ref(&m_audioFrameQueue.frameVec[m_audioFrameQueue.pushIndex].frame,frame);
+    m_audioFrameQueue.frameVec[m_audioFrameQueue.pushIndex].serial=m_audioPktDecoder.serial;
     m_audioFrameQueue.pushIndex=(m_audioFrameQueue.pushIndex+1)%m_maxFrameQueueSize;
     m_audioFrameQueue.size++;
 }
@@ -471,7 +499,13 @@ int Decoder::getAFrame(AVFrame* frame)
         if(!ret)
             return 0;
     }  
-    av_frame_move_ref(frame,&m_audioFrameQueue.frameVec[m_audioFrameQueue.readIndex]);
+    if(m_audioFrameQueue.frameVec[m_audioFrameQueue.readIndex].serial!=m_audioPacketQueue.serial) {
+        av_frame_unref(&m_audioFrameQueue.frameVec[m_audioFrameQueue.readIndex].frame);
+        m_audioFrameQueue.readIndex=(m_audioFrameQueue.readIndex+1)%m_maxFrameQueueSize;
+        m_audioFrameQueue.size--;
+        return 0;
+    }
+    av_frame_move_ref(frame,&m_audioFrameQueue.frameVec[m_audioFrameQueue.readIndex].frame);
     m_audioFrameQueue.readIndex=(m_audioFrameQueue.readIndex+1)%m_maxFrameQueueSize;
     m_audioFrameQueue.size--;
     return 1;
@@ -479,20 +513,25 @@ int Decoder::getAFrame(AVFrame* frame)
 
 void Decoder::pushVFrame(AVFrame* frame)
 {
-    std::lock_guard<std::mutex> lock(m_videoFrameQueue.mutex);
-    av_frame_move_ref(&m_videoFrameQueue.frameVec[m_videoFrameQueue.pushIndex],frame);
+    std::lock_guard<std::mutex> lock(m_videoFrameQueue.mutex);   
+    m_videoFrameQueue.frameVec[m_videoFrameQueue.pushIndex].serial=m_videoPktDecoder.serial;
+    m_videoFrameQueue.frameVec[m_videoFrameQueue.pushIndex].duration=\
+            (m_vidFrameRate.den&&m_vidFrameRate.den) ? av_q2d(AVRational{m_vidFrameRate.den,m_vidFrameRate.num}) : 0.00;
+    m_videoFrameQueue.frameVec[m_videoFrameQueue.pushIndex].pts=\
+            frame->pts*av_q2d(m_fmtCtx->streams[m_videoIndex]->time_base);
+    av_frame_move_ref(&m_videoFrameQueue.frameVec[m_videoFrameQueue.pushIndex].frame,frame);
     m_videoFrameQueue.pushIndex=(m_videoFrameQueue.pushIndex+1)%m_maxFrameQueueSize;
     m_videoFrameQueue.size++;
     //qDebug()<<"RemainingVFrame:"<<m_videoFrameQueue.size-m_videoFrameQueue.shown;
 }
 
-AVFrame* Decoder::peekLastVFrame()
+Decoder::MyFrame* Decoder::peekLastVFrame()
 {
-    AVFrame* frame=&m_videoFrameQueue.frameVec[m_videoFrameQueue.readIndex];
+    Decoder::MyFrame* frame=&m_videoFrameQueue.frameVec[m_videoFrameQueue.readIndex];
     return frame;
 }
 
-AVFrame* Decoder::peekVFrame()
+Decoder::MyFrame* Decoder::peekVFrame()
 {
     while(!m_videoFrameQueue.size) {
         std::unique_lock<std::mutex> lock(m_videoFrameQueue.mutex);
@@ -502,11 +541,11 @@ AVFrame* Decoder::peekVFrame()
             return nullptr;
     }
     int index=(m_videoFrameQueue.readIndex+m_videoFrameQueue.shown)%m_maxFrameQueueSize;
-    AVFrame* frame=&m_videoFrameQueue.frameVec[index];
+    Decoder::MyFrame* frame=&m_videoFrameQueue.frameVec[index];
     return frame;
 }
 
-AVFrame* Decoder::peekNextVFrame()
+Decoder::MyFrame* Decoder::peekNextVFrame()
 {
     while(m_videoFrameQueue.size<2) {
         std::unique_lock<std::mutex> lock(m_videoFrameQueue.mutex);
@@ -516,7 +555,7 @@ AVFrame* Decoder::peekNextVFrame()
             return nullptr;
     }
     int index=(m_videoFrameQueue.readIndex+m_videoFrameQueue.shown+1)%m_maxFrameQueueSize;
-    AVFrame* frame=&m_videoFrameQueue.frameVec[index];
+    Decoder::MyFrame* frame=&m_videoFrameQueue.frameVec[index];
     return frame;
 }
 
@@ -529,7 +568,7 @@ void Decoder::setNextVFrame()
         m_videoFrameQueue.shown=1;
         return;
     }
-    av_frame_unref(&m_videoFrameQueue.frameVec[m_videoFrameQueue.readIndex]);
+    av_frame_unref(&m_videoFrameQueue.frameVec[m_videoFrameQueue.readIndex].frame);
     m_videoFrameQueue.readIndex=(m_videoFrameQueue.readIndex+1)%m_maxFrameQueueSize; 
     m_videoFrameQueue.size--;
 }

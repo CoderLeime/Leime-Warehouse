@@ -25,7 +25,7 @@ Widget::Widget(QWidget *parent)
     ui->label_pts->setAlignment(Qt::AlignCenter);
     ui->label_duration->setAlignment(Qt::AlignCenter);
     ui->label_volume->setAlignment(Qt::AlignCenter);
-    ui->lineEdit_input->setText("http://60.204.208.153/xcz.mp4");
+    ui->lineEdit_input->setText("D:/MusicResources/Music/MV/xcz.mp4");//http://60.204.208.153/xcz.mp4
 
     //自定义数据类型在槽中作为参数传递需先注册
     qRegisterMetaType<QSharedPointer<YUV420Frame>>("QSharedPointer<YUV420Frame>");

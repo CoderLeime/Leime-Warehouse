@@ -20,6 +20,8 @@ using AVTool::Decoder;
 
 class YUV420Frame;
 
+typedef Decoder::MyFrame MyFrame;
+
 class AVPlayer:public QObject
 {
     Q_OBJECT
@@ -83,7 +85,7 @@ private:
     int initVideo();
     void videoCallback(std::shared_ptr<void> par);
     double computeTargetDelay(double delay);
-    double vpDuration(AVFrame* lastFrame, AVFrame* frame);
+    double vpDuration(MyFrame* lastFrame, MyFrame* curFrame);
     void displayImage(AVFrame* frame);
     void initAVClock();
 
